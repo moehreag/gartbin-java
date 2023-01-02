@@ -154,7 +154,7 @@ public class Gartbin {
         object.addProperty("password", password);
         object.addProperty("expiration", expiration == -1 ? "never" : String.valueOf(expiration));
 
-        return instanceUrl + "/" + NetworkingWrapper.getRequest(instanceUrl+"/paste", createHttpClient()).getAsJsonObject().get("pasteId").getAsString();
+        return instanceUrl + "/" + NetworkingWrapper.getRequest(instanceUrl+"/api/paste", createHttpClient()).getAsJsonObject().get("pasteId").getAsString();
     }
 
     /**
