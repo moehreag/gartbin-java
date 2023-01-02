@@ -3,7 +3,6 @@ package io.github.moehreag.gartbin_java;
 import com.google.common.collect.Lists;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import org.apache.http.client.methods.RequestBuilder;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 
@@ -125,10 +124,65 @@ public class Gartbin {
     public String uploadFile(File file) throws IOException {
         String id = upload(instanceUrl+"/api/stream", file);
         if(!id.isEmpty()) {
-            return instanceUrl + "/api/" + id;
+            return instanceUrl + "/" + id;
         }
         // This will never occur
         throw new RuntimeException();
+    }
+
+    /**
+     * Download a file.
+     *
+     * @param id the URL/ID of the file to download
+     * @return a GartbinFile containing the data as an InputStream and the original File name
+     * @throws IOException if an exception occurs
+     */
+    public GartbinFile downloadFile(String id) throws IOException {
+        return download(normalizeUrl(id));
+    }
+
+    /**
+     * Create a new paste
+     * @param content the paste's content
+     * @return the paste's id
+     * @throws IOException if an exception occurs
+     */
+    public String createPaste(String content) throws IOException {
+        JsonObject object = new JsonObject();
+        object.addProperty("language", "plaintext");
+        object.addProperty("content", content);
+        object.addProperty("password", password);
+        object.addProperty("expiration", expiration == -1 ? "never" : String.valueOf(expiration));
+
+        return instanceUrl + "/" + NetworkingWrapper.getRequest(instanceUrl+"/paste", createHttpClient()).getAsJsonObject().get("pasteId").getAsString();
+    }
+
+    /**
+     * Get the contents of a paste
+     * @param id the paste id/url
+     * @return the paste's content
+     * @throws IOException if an exception occurs
+     */
+    public String downloadPaste(String id) throws IOException {
+        String url = normalizeUrl(id);
+        if (!url.isEmpty()) {
+            JsonElement element = NetworkingWrapper.getRequest(url + (password.isEmpty() ? "" : "?password=" + password), createHttpClient());
+            if (element != null) {
+                return element.getAsJsonObject().get("content").getAsString();
+            }
+        }
+        return "";
+    }
+
+    private String normalizeUrl(String id){
+        if(id.contains(instanceUrl+"/api/")) {
+            return id;
+        } else if(id.contains(instanceUrl) && !id.contains("api")) {
+            return normalizeUrl(id.substring(id.lastIndexOf("/")));
+        } else if(id.startsWith("https://") && id.contains("api")) {
+            return id;
+        }
+        return instanceUrl+"/api/"+id;
     }
 
     private String upload(String url, File file) throws IOException {
@@ -186,27 +240,9 @@ public class Gartbin {
         return "";
     }
 
-    /**
-     * Download a file.
-     *
-     * @param id the URL/ID of the file to download
-     * @return a GartbinFile containing the data as an InputStream and the original File name
-     * @throws IOException if an exception occurs
-     */
-    public GartbinFile downloadFile(String id) throws IOException {
-        if(id.contains(instanceUrl+"/api/")) {
-            return download(id);
-        } else if(id.contains(instanceUrl) && !id.contains("api")) {
-            return downloadFile(id.substring(id.lastIndexOf("/")));
-        } else if(id.startsWith("https://") && id.contains("api")) {
-            return download(id);
-        }
-        return download(instanceUrl+"/api/"+id);
-    }
-
     private GartbinFile download(String url) throws IOException {
         if(!url.isEmpty()) {
-            JsonElement element = NetworkingWrapper.request(RequestBuilder.get(url + (password.isEmpty() ? "" : "?password="+password)).build(), createHttpClient());
+            JsonElement element = NetworkingWrapper.getRequest(url + (password.isEmpty() ? "" : "?password="+password), createHttpClient());
             if(element != null) {
                 JsonObject response = element.getAsJsonObject();
                 String content = response.get("content").getAsString();
@@ -221,7 +257,7 @@ public class Gartbin {
         return file.getName() + separator + Base64.getEncoder().encodeToString(Files.readAllBytes(file.toPath()));
     }
 
-    private GartbinFile decodeB64(String data) throws IOException {
+    private GartbinFile decodeB64(String data) {
         String[] info = data.split(separator);
         byte[] bytes = Base64.getDecoder().decode(info[info.length-1]);
         return new GartbinFile(new ByteArrayInputStream(bytes), info[0]);
